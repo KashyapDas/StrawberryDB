@@ -8,7 +8,11 @@ const strawberry = new Proxy(strawberryCore, {
             return target[prop];
         }
         // If not exists then, convert the user syntax to the core syntax
-        return {};
+        return {
+            createSchema: (schemaDefination) => {
+                return target.createSchema(prop, schemaDefination);
+            }
+        };
     }
 });
 module.exports = {
