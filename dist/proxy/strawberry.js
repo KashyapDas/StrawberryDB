@@ -9,8 +9,8 @@ const strawberry = new Proxy(strawberryCore, {
         }
         // If not exists then, convert the user syntax to the core syntax
         return {
-            createSchema: (schemaDefination) => {
-                return target.createSchema(prop, schemaDefination);
+            createSchema: (schemaDefination, returnValue) => {
+                return target.createSchema(prop, schemaDefination, returnValue);
             },
             createRelation: (table2, addedProperties) => {
                 return target.createRelation(prop, table2, addedProperties);

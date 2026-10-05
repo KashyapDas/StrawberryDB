@@ -52,7 +52,7 @@ class strawberryCore {
             strawberryCore.isConnected = false;
         }
     }
-    static async createSchema(schemaName, schemaDefination) {
+    static async createSchema(schemaName, schemaDefination, returnValue = false) {
         // create schema for mongodb
         if (this.isConnected == true && strawberryCore.databaseType === "mongodb") {
             // here the schemaDefination is an object - {name : {}, age : {}, email: {} }
@@ -61,6 +61,15 @@ class strawberryCore {
                 const throwError = (msg) => { throw new Error(msg); };
                 const field = schemaDefination[fieldName];
                 let mongooseType;
+                // check if it doesnot contain _id or id field in the output
+                for (const fieldname in schemaDefination) {
+                    if (fieldname === "_id") {
+                        throw new Error(`"${fieldname}" is reserved by the strawberry class and cannot be used`);
+                    }
+                    if (fieldname === "id") {
+                        throw new Error(`"${fieldname}" is reserved by the strawberry class and cannot be used`);
+                    }
+                }
                 // check the type of each specific field
                 if (!strawberryType.includes(field.type)) {
                     console.log("Type not match");
@@ -217,11 +226,144 @@ class strawberryCore {
             // create mongoose model dynamically
             const newModel = mongoose.model(schemaName, newSchema);
             // return the created model
-            return newModel;
+            if (typeof returnValue !== "boolean") {
+                throw new Error("Third Parameter of createSchmea() must be boolean");
+            }
+            if (returnValue === true) {
+                return newModel;
+            }
         }
         // create table for postgresql
         if (this.isConnected == true && strawberryCore.databaseType === "postgresql") {
-            console.log(schemaDefination);
+            const pool = strawberryCore.databaseURL;
+            // traverse all the field
+            for (const fieldname in schemaDefination) {
+                if (fieldname === "_id") {
+                    throw new Error(`"${fieldname}" is reserved by the strawberry class and cannot be used`);
+                }
+                if (fieldname === "id") {
+                    throw new Error(`"${fieldname}" is reserved by the strawberry class and cannot be used`);
+                }
+            }
+            // do table creation task
+            const columns = [];
+            // by default the id was push in the table
+            columns.push(`"_id" UUID PRIMARY KEY`);
+            // traverse through all the field 
+            for (const fieldname in schemaDefination) {
+                const field = schemaDefination[fieldname];
+                // check if all type must be in strawberry list
+                let postgresType;
+                // convert the type of the object
+                if (!strawberryType.includes(field.type)) {
+                    throw new Error(`"${field.type} is not supported`);
+                }
+                if (field.type === "string") {
+                    postgresType = "TEXT";
+                }
+                else if (field.type === "int") {
+                    postgresType = "INTEGER";
+                }
+                else if (field.type === "float") {
+                    postgresType = "DOUBLE PRECISION";
+                }
+                else if (field.type === "boolean") {
+                    postgresType = "BOOLEAN";
+                }
+                else if (field.type === "date") {
+                    postgresType = "TIMESTAMP";
+                }
+                else if (field.type === "object") {
+                    postgresType = "JSONB";
+                }
+                else if (field.type === "array") {
+                    postgresType = "JSONB";
+                }
+                else {
+                    throw new Error(`Unsupported type for "${fieldname}"`);
+                }
+                // eg - ("name" text)
+                let columnDefinition = `"${fieldname}" ${postgresType}`;
+                // handle the requied field
+                if (field.required !== undefined) {
+                    if (typeof field.required !== "boolean") {
+                        throw new Error(`field.required of "${fieldname}" must be boolean`);
+                    }
+                    if (field.required === true) {
+                        columnDefinition += " NOT NULL";
+                    }
+                }
+                // handle the unique field
+                if (field.unique !== undefined) {
+                    if (typeof field.required !== "boolean") {
+                        throw new Error(`field.unique of "${fieldname} must be boolean"`);
+                    }
+                    if (field.unique === true) {
+                        columnDefinition += " UNIQUE";
+                    }
+                }
+                // handle the default
+                if (field.default !== undefined) {
+                    // handle the default value if its in 
+                    if (field.type === "string") {
+                        if (typeof field.default !== "string") {
+                            throw new Error(`Default value of "${fieldname}" must be a string`);
+                        }
+                        columnDefinition += ` DEFAULT '${field.default}'`;
+                    }
+                    // handle the default value if its in 
+                    else if (field.type === "int") {
+                        if (typeof field.default !== "number") {
+                            throw new Error(`Default value of "${fieldname}" must be a integer`);
+                        }
+                        columnDefinition += ` DEFAULT '${field.default}'`;
+                    }
+                    // handle the default value if its in 
+                    else if (field.type === "float") {
+                        if (typeof field.default !== "number") {
+                            throw new Error(`Default value of "${fieldname}" must be a float`);
+                        }
+                        columnDefinition += ` DEFAULT '${field.default}'`;
+                    }
+                    // handle the default value if its in 
+                    else if (field.type === "boolean") {
+                        if (typeof field.default !== "boolean") {
+                            throw new Error(`Default value of "${fieldname}" must be a boolean`);
+                        }
+                        columnDefinition += ` DEFAULT '${field.default}'`;
+                    }
+                    // handle the default value if its in 
+                    else if (field.type === "date") {
+                        if (!(field.default instanceof Date)) {
+                            throw new Error(`Default value of "${fieldname}" must be a date`);
+                        }
+                        columnDefinition += ` DEFAULT '${field.default.toISOString()}'`;
+                    }
+                    // handle the default value if its in 
+                    else if (field.type === "array") {
+                        if (!Array.isArray(field.default)) {
+                            throw new Error(`Default value of "${fieldname}" must be a array`);
+                        }
+                        columnDefinition += ` DEFAULT '${JSON.stringify(field.default)}'::jsonb`;
+                    }
+                    // handle the default value if its in 
+                    else if (field.type === "object") {
+                        if (typeof field.default !== "object" || field.default === null || Array.isArray(field.default)) {
+                            throw new Error(`Default value of "${fieldname}" must be a object`);
+                        }
+                        columnDefinition += ` DEFAULT '${JSON.stringify(field.default)}'::jsonb`;
+                    }
+                }
+                columns.push(columnDefinition);
+            }
+            const query = `CREATE TABLE IF NOT EXISTS "${schemaName}" (${columns.join(",\n")})`;
+            const result = await pool.query(query);
+            if (typeof returnValue !== "boolean") {
+                throw new Error("Third Parameter of createSchmea() must be boolean");
+            }
+            if (returnValue === true) {
+                return result;
+            }
         }
     }
     static async createRelation(table1, table2, addedProperties) {
@@ -238,7 +380,6 @@ class strawberryCore {
                     ref: table2
                 }
             });
-            console.log(`Relationship created`);
             return firstModel.schema.paths;
         }
         if (this.isConnected == true && strawberryCore.databaseType === "postgresql") {

@@ -1,7 +1,7 @@
 const { strawberry, connectSandBox } = require("../dist/proxy/strawberry");
 
 const connectionString1 =
-    "postgresql://neondb_owner:npg_PThOfAVw6RJ1@ep-nameless-heart-axrai6u9-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=verify-full&channel_binding=require";
+    "postgresql://neondb_owner:npg_PThOfAVw6RJ1@ep-nameless-heart-axrai6u9-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=verify-full&channel_binding=requir/strawberry";
 
     const connectionString2 =
     "mongodb+srv://kashyapdas2234_db_user:Kashyap123das@cluster0.4efyy7t.mongodb.net/strawberry";
@@ -19,8 +19,16 @@ async function call(){
             type: "string",
             required: true,
             unique: true
+        },
+        date : {
+            type : "date",
+            required : true
         }
-    });
+    },true);
+
+    if(userTable) console.log(userTable);
+    else console.log("No data came");
+
     const accountTable = await strawberry.account.createSchema({
         accountNumber: {
             type: "string",
@@ -33,11 +41,14 @@ async function call(){
             default: 0
         }
     });
-    
-    const userAccountRelationship = await strawberry.users.createRelation("account","accountId");
-    
-    console.log(userAccountRelationship);
+
+    if(accountTable) console.log(accountTable);
+    else console.log("No data came");
 }
+    
 call();
 
 
+// const userAccountRelationship = await strawberry.users.createRelation("account","accountId");
+    
+    // console.log(userAccountRelationship);
