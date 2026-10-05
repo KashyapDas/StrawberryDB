@@ -1,6 +1,7 @@
 import pg = require("pg");
 import mongoose = require("mongoose");
 const Pool = pg.Pool;
+const {queryTracker} = require("../feature/queryTracker");
 
 type StrawberryType = "string" | "int" | "float" | "boolean" | "date" | "array" | "object";
 
@@ -263,6 +264,13 @@ class strawberryCore{
                 schemaName,
                 newSchema
             );
+            const query = `
+                mongoose.Schema(${JSON.stringify(mongooseSchemaDefinition, null, 2)})
+
+                mongoose.model("${schemaName}", schema)
+                `;
+            // call the tracking features 
+            queryTracker.trackQuery(query, "create",strawberryCore.databaseType);
             // return the created model
             if(typeof returnValue !== "boolean"){
                 throw new Error("Third Parameter of createSchmea() must be boolean");
@@ -409,6 +417,7 @@ class strawberryCore{
             }
             const query = `CREATE TABLE IF NOT EXISTS "${schemaName}" (${columns.join(",\n")})`;
             const result = await pool.query(query);
+            queryTracker.trackQuery(query,"create",strawberryCore.databaseType);
             if(typeof returnValue !== "boolean"){
                 throw new Error("Third Parameter of createSchmea() must be boolean");
             }

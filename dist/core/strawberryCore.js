@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const pg = require("pg");
 const mongoose = require("mongoose");
 const Pool = pg.Pool;
+const { queryTracker } = require("../feature/queryTracker");
 const strawberryType = [
     "string",
     "int",
@@ -225,6 +226,13 @@ class strawberryCore {
             const newSchema = new mongoose.Schema(mongooseSchemaDefinition);
             // create mongoose model dynamically
             const newModel = mongoose.model(schemaName, newSchema);
+            const query = `
+                mongoose.Schema(${JSON.stringify(mongooseSchemaDefinition, null, 2)})
+
+                mongoose.model("${schemaName}", schema)
+                `;
+            // call the tracking features 
+            queryTracker.trackQuery(query, "create", strawberryCore.databaseType);
             // return the created model
             if (typeof returnValue !== "boolean") {
                 throw new Error("Third Parameter of createSchmea() must be boolean");
@@ -372,7 +380,7 @@ class strawberryCore {
             }
             const query = `CREATE TABLE IF NOT EXISTS "${schemaName}" (${columns.join(",\n")})`;
             const result = await pool.query(query);
-            console.log(result.command);
+            queryTracker.trackQuery(query, "create", strawberryCore.databaseType);
             if (typeof returnValue !== "boolean") {
                 throw new Error("Third Parameter of createSchmea() must be boolean");
             }
