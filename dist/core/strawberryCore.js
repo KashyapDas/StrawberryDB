@@ -259,7 +259,21 @@ class strawberryCore {
                     throw new Error(`"${field.type} is not supported`);
                 }
                 if (field.type === "string") {
-                    postgresType = "TEXT";
+                    // check for both varchar and text
+                    if (field.maxLength !== undefined) {
+                        if (typeof field.maxLength !== "number") {
+                            throw new Error(`field.maxLength of "${fieldname} must be a number"`);
+                        }
+                        postgresType = `VARCHAR(${field.maxLength})`;
+                    }
+                    else
+                        postgresType = "TEXT";
+                    if (field.minLength !== undefined) {
+                        if (typeof field.minLength !== "number") {
+                            throw new Error(`field.minLength of "${fieldname} must be a number"`);
+                        }
+                        postgresType += ` CHECK (length("${fieldname}") >= ${field.minLength})`;
+                    }
                 }
                 else if (field.type === "int") {
                     postgresType = "INTEGER";
@@ -358,6 +372,7 @@ class strawberryCore {
             }
             const query = `CREATE TABLE IF NOT EXISTS "${schemaName}" (${columns.join(",\n")})`;
             const result = await pool.query(query);
+            console.log(result.command);
             if (typeof returnValue !== "boolean") {
                 throw new Error("Third Parameter of createSchmea() must be boolean");
             }

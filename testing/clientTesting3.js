@@ -8,13 +8,14 @@ const connectionString1 =
 
 
 async function call(){
-    await connectSandBox(connectionString2);
+    await connectSandBox(connectionString1);
     const userTable = await strawberry.users.createSchema({
         name: {
             type: "string",
-            required: true
+            required: true,
+            minLength : 3,
+            maxLength : 20
         },
-
         email: {
             type: "string",
             required: true,
