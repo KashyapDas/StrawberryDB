@@ -12,8 +12,8 @@ const strawberry = new Proxy(strawberryCore, {
             createSchema: (schemaDefination, returnValue) => {
                 return target.createSchema(prop, schemaDefination, returnValue);
             },
-            createRelation: (table2, addedProperties) => {
-                return target.createRelation(prop, table2, addedProperties);
+            createRelation: (table2, addedProperties, returnValue) => {
+                return target.createRelation(prop, table2, addedProperties, returnValue);
             }
         };
     }
