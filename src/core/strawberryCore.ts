@@ -708,6 +708,42 @@ class strawberryCore{
     
     }
 
+    static async updateRecord(schemaName : string, filterMethod : Record<string, any>, updateProps : Record<string, any>, updateSingle : boolean = false){
+        if(this.isConnected === true && strawberryCore.databaseType === "mongodb"){
+            const model = mongoose.models[schemaName];
+            // check if the model exist or not 
+            if(!model){
+                throw new Error(`StrawberryDB : Schema '${schemaName} does not exists.`);
+            }
+
+            // update the first matching document
+            const result = updateSingle
+            ? await model.updateOne(
+                filterMethod,     
+                { $set: updateProps },
+                { runValidators : true }
+            )
+            : await model.updateMany(
+                filterMethod,     
+                { $set: updateProps },
+                { runValidators : true }
+            );
+
+            queryTracker.trackQuery(
+                `db.${schemaName}.${updateSingle ? "updateOne" : "updateMany"}(
+                    ${JSON.stringify(filterMethod)},
+                    {$set : ${JSON.stringify(updateProps)} }
+                )`,
+                "update",
+                strawberryCore.databaseType
+            );
+            return result;
+        }
+        if(this.isConnected === true && strawberryCore.databaseType === "postgresql"){
+            console.log("update record of postgresql");
+        }
+        
+    }
 }
 
 module.exports = {strawberryCore};

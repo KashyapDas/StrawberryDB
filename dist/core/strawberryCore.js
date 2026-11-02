@@ -580,6 +580,24 @@ class strawberryCore {
             }
         }
     }
+    static async updateRecord(schemaName, filterMethod, updateProps, updateSingle = false) {
+        if (this.isConnected === true && strawberryCore.databaseType === "mongodb") {
+            const model = mongoose.models[schemaName];
+            // check if the model exist or not 
+            if (!model) {
+                throw new Error(`StrawberryDB : Schema '${schemaName} does not exists.`);
+            }
+            // update the first matching document
+            const result = updateSingle
+                ? await model.updateOne(filterMethod, { $set: updateProps }, { runValidators: true })
+                : await model.updateMany(filterMethod, { $set: updateProps }, { runValidators: true });
+            queryTracker.trackQuery(`db.${schemaName}.${updateSingle ? "updateOne" : "updateMany"}(
+                    ${JSON.stringify(filterMethod)},
+                    {$set : ${JSON.stringify(updateProps)} }
+                )`, "update", strawberryCore.databaseType);
+            return result;
+        }
+    }
 }
 module.exports = { strawberryCore };
 //# sourceMappingURL=strawberryCore.js.map
