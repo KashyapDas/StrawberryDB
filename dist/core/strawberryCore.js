@@ -11,7 +11,7 @@ const strawberryType = [
     "boolean",
     "date",
     "array",
-    "object"
+    "object",
 ];
 class strawberryCore {
     // data members of the class
@@ -134,7 +134,7 @@ class strawberryCore {
                     }
                     else if (field.type === "date") {
                         if (!(field.default instanceof Date)) {
-                            throwError(`Default value of "${fieldName}" must be a Date`);
+                            throwError(`Default value of "${fieldName}" must be a date`);
                         }
                         mongooseDefault = field.default;
                     }
@@ -410,8 +410,7 @@ class strawberryCore {
                 return `${addedProperties} from ${table2} successfully added to ${table1}`;
             }
         }
-        if (this.isConnected === true &&
-            strawberryCore.databaseType === "postgresql") {
+        if (this.isConnected === true && strawberryCore.databaseType === "postgresql") {
             try {
                 // Check the third parameter
                 if (typeof returnValue !== "boolean") {
@@ -420,53 +419,53 @@ class strawberryCore {
                 const pool = strawberryCore.databaseURL;
                 // Check whether table1 exists
                 const firstTable = await pool.query(`
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = current_schema()
-            AND table_name = $1
-            `, [table1]);
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = current_schema()
+                    AND table_name = $1
+                    `, [table1]);
                 if (firstTable.rowCount === 0) {
                     throw new Error(`Table "${table1}" doesn't exist.`);
                 }
                 // Check whether table2 exists
                 const secondTable = await pool.query(`
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = current_schema()
-            AND table_name = $1
-            `, [table2]);
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = current_schema()
+                    AND table_name = $1
+                    `, [table2]);
                 if (secondTable.rowCount === 0) {
                     throw new Error(`Table "${table2}" doesn't exist.`);
                 }
                 // Add the property to table1 if it doesn't exist
                 const addColumnQuery = `
-            ALTER TABLE "${table1}"
-            ADD COLUMN IF NOT EXISTS "${addedProperties}" UUID;
-        `;
+                    ALTER TABLE "${table1}"
+                    ADD COLUMN IF NOT EXISTS "${addedProperties}" UUID;
+                `;
                 await pool.query(addColumnQuery);
                 queryTracker.trackQuery(addColumnQuery, `create_relation_add_column ${table1}.${addedProperties}`, strawberryCore.databaseType);
                 // Generate the foreign key constraint name
                 const constraintName = `${table1}_${addedProperties}_fkey`;
                 // Check whether the foreign key already exists
                 const constraint = await pool.query(`
-            SELECT
-                tc.constraint_name,
-                ccu.table_name AS referenced_table,
-                ccu.column_name AS referenced_column
-            FROM information_schema.table_constraints AS tc
-            JOIN information_schema.key_column_usage AS kcu
-                ON tc.constraint_name = kcu.constraint_name
-                AND tc.constraint_schema = kcu.constraint_schema
-            JOIN information_schema.constraint_column_usage AS ccu
-                ON tc.constraint_name = ccu.constraint_name
-                AND tc.constraint_schema = ccu.constraint_schema
-            WHERE tc.constraint_schema = current_schema()
-                AND tc.table_name = $1
-                AND tc.constraint_name = $2
-                AND tc.constraint_type = 'FOREIGN KEY'
-                AND kcu.column_name = $3
-            LIMIT 1
-            `, [table1, constraintName, addedProperties]);
+                    SELECT
+                        tc.constraint_name,
+                        ccu.table_name AS referenced_table,
+                        ccu.column_name AS referenced_column
+                    FROM information_schema.table_constraints AS tc
+                    JOIN information_schema.key_column_usage AS kcu
+                        ON tc.constraint_name = kcu.constraint_name
+                        AND tc.constraint_schema = kcu.constraint_schema
+                    JOIN information_schema.constraint_column_usage AS ccu
+                        ON tc.constraint_name = ccu.constraint_name
+                        AND tc.constraint_schema = ccu.constraint_schema
+                    WHERE tc.constraint_schema = current_schema()
+                        AND tc.table_name = $1
+                        AND tc.constraint_name = $2
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                        AND kcu.column_name = $3
+                    LIMIT 1
+                    `, [table1, constraintName, addedProperties]);
                 // Verify the existing foreign key
                 if (constraint.rowCount && constraint.rowCount > 0) {
                     const existingConstraint = constraint.rows[0];
@@ -480,11 +479,11 @@ class strawberryCore {
                 else {
                     // Add the foreign key only if it doesn't exist
                     const addConstraintQuery = `
-                ALTER TABLE "${table1}"
-                ADD CONSTRAINT "${constraintName}"
-                FOREIGN KEY ("${addedProperties}")
-                REFERENCES "${table2}" ("_id");
-            `;
+                        ALTER TABLE "${table1}"
+                        ADD CONSTRAINT "${constraintName}"
+                        FOREIGN KEY ("${addedProperties}")
+                        REFERENCES "${table2}" ("_id");
+                    `;
                     await pool.query(addConstraintQuery);
                     queryTracker.trackQuery(addConstraintQuery, `create_relation ${table1} - ${table2}`, strawberryCore.databaseType);
                 }
