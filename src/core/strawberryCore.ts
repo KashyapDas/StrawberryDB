@@ -592,6 +592,122 @@ class strawberryCore{
         }
     }
 
+    static async insertRecord(schemaName : string, schemaProperty : Record<string, any>){
+        if (strawberryCore.isConnected === true && strawberryCore.databaseType === "mongodb") {
+
+            const model = mongoose.models[schemaName];
+
+            if (!model) {
+                throw new Error(
+                    `StrawberryDB: Schema '${schemaName}' does not exist.`
+                );
+            }
+
+            const result = await model.create(schemaProperty);
+
+
+            queryTracker.trackQuery(
+                `await model.create(${schemaProperty})`,
+                "insert",
+                this.databaseType
+            );
+            return result;
+
+        }
+        if (strawberryCore.isConnected === true && strawberryCore.databaseType === "postgresql"){
+            const pool: pg.Pool = strawberryCore.databaseURL as pg.Pool;
+            try {
+                // Generate UUID for the _id field
+                const { randomUUID } = require("crypto");
+                const id = randomUUID();
+
+                // Get all the properties and values
+                const properties = Object.keys(schemaProperty); // ['name','email']
+                const values = Object.values(schemaProperty); // ['ram','ram@gamil.com']
+
+
+                // Check reserved properties
+                if (properties.includes("_id") || properties.includes("id")) {
+                    throw new Error('"id" and "_id" are reserved by StrawberryDB.');
+                }
+
+                // Check whether the object contains data
+                if (properties.length === 0) {
+                    throw new Error("Cannot insert an empty record.");
+                }
+
+                // Escape SQL identifiers
+                const escapeIdentifier = (identifier: string) =>
+                    `"${identifier.replace(/"/g, '""')}"`;
+
+                const tableName = escapeIdentifier(schemaName);
+
+                const columns = [
+                    escapeIdentifier("_id"),
+                    ...properties.map(escapeIdentifier)
+                ];
+
+                // Convert arrays into JSON strings for PostgreSQL JSONB
+                const formattedValues = values.map(value =>
+                    Array.isArray(value) ? JSON.stringify(value) : value
+                );
+
+                // Generate parameter placeholders
+                const placeholders = [
+                    "$1",
+                    ...properties.map((_, index) => `$${index + 2}`)
+                ];
+
+                // Generate INSERT query
+                const query = `
+                    INSERT INTO ${tableName}
+                    (${columns.join(", ")})
+                    VALUES (${placeholders.join(", ")})
+                    RETURNING *;
+                `;
+
+                // Execute PostgreSQL query
+                const result = await pool.query(query, [
+                    id,
+                    ...formattedValues
+                ]);
+                
+                // Track the query
+                queryTracker.trackQuery(
+                    query,
+                    "insert",
+                    strawberryCore.databaseType
+                );
+
+                // Return inserted record
+                return result.rows[0];
+
+            } catch (error: any) {
+
+                // PostgreSQL error normalization
+                if (error.code === "23505") {
+                    throw new Error("A record with this unique value already exists.");
+                }
+
+                if (error.code === "23502") {
+                    throw new Error("A required field cannot be empty.");
+                }
+
+                if (error.code === "23503") {
+                    throw new Error("Referenced record does not exist.");
+                }
+
+                if (error.code === "22P02") {
+                    throw new Error("Invalid data format supplied.");
+                }
+
+                throw error;
+            }
+        }
+
+    
+    }
+
 }
 
 module.exports = {strawberryCore};
