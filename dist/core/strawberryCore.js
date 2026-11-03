@@ -4,6 +4,8 @@ const pg = require("pg");
 const mongoose = require("mongoose");
 const Pool = pg.Pool;
 const { queryTracker } = require("../feature/queryTracker");
+const { strawberryReusable } = require("../reusable/strawberryReusable");
+// strawberry datatype array
 const strawberryType = [
     "string",
     "int",
@@ -13,7 +15,7 @@ const strawberryType = [
     "array",
     "object",
 ];
-class strawberryCore {
+class strawberryCore extends strawberryReusable {
     // data members of the class
     static databaseType;
     static databaseURL;
@@ -580,22 +582,39 @@ class strawberryCore {
             }
         }
     }
-    static async updateRecord(schemaName, filterMethod, updateProps, updateSingle = false) {
+    static async updateRecord(schemaName, conditionString, updateProps, updateSingle = false) {
         if (this.isConnected === true && strawberryCore.databaseType === "mongodb") {
-            const model = mongoose.models[schemaName];
-            // check if the model exist or not 
-            if (!model) {
-                throw new Error(`StrawberryDB : Schema '${schemaName} does not exists.`);
+            try {
+                // Validate condition - check weather the string is not empty
+                if (!conditionString || !conditionString.trim()) {
+                    throw new Error("StrawberryDB: Condition cannot be empty.");
+                }
+                // Validate update properties
+                if (!updateProps || typeof updateProps !== "object" || Object.keys(updateProps).length === 0) {
+                    throw new Error("StrawberryDB: Update properties cannot be empty.");
+                }
+                // Convert condition string into tokens
+                const tokens = this.tokenizeCondition(conditionString);
+                // Convert tokens into MongoDB filter
+                const filter = this.parseWhere(tokens);
+                // Get MongoDB model
+                const model = mongoose.model(schemaName);
+                // Prepare update query
+                const updateQuery = {
+                    $set: updateProps
+                };
+                // Execute update
+                const result = updateSingle
+                    ? await model.updateOne(filter, updateQuery)
+                    : await model.updateMany(filter, updateQuery);
+                return result;
             }
-            // update the first matching document
-            const result = updateSingle
-                ? await model.updateOne(filterMethod, { $set: updateProps }, { runValidators: true })
-                : await model.updateMany(filterMethod, { $set: updateProps }, { runValidators: true });
-            queryTracker.trackQuery(`db.${schemaName}.${updateSingle ? "updateOne" : "updateMany"}(
-                    ${JSON.stringify(filterMethod)},
-                    {$set : ${JSON.stringify(updateProps)} }
-                )`, "update", strawberryCore.databaseType);
-            return result;
+            catch (error) {
+                throw new Error(`StrawberryDB updateRecord(): ${error.message}`);
+            }
+        }
+        if (this.isConnected === true && strawberryCore.databaseType === "postgresql") {
+            console.log("postgres is not implemented yet");
         }
     }
 }

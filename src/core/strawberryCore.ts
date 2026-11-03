@@ -2,9 +2,12 @@ import pg = require("pg");
 import mongoose = require("mongoose");
 const Pool = pg.Pool;
 const {queryTracker} = require("../feature/queryTracker");
+const {strawberryReusable} = require("../reusable/strawberryReusable");
 
+// strawberry datatype
 type StrawberryType = "string" | "int" | "float" | "boolean" | "date" | "array" | "object";
 
+// strawberry datatype array
 const strawberryType: StrawberryType[] = [
     "string",
     "int",
@@ -15,6 +18,7 @@ const strawberryType: StrawberryType[] = [
     "object",
 ];
 
+// strawberry value properties
 type strawberryField = {
     type : StrawberryType,
     required? : boolean,
@@ -28,7 +32,8 @@ type strawberryField = {
     lowercase? : boolean 
 }
 
-class strawberryCore{
+
+class strawberryCore extends strawberryReusable{
     // data members of the class
     private static databaseType  : string | undefined;
     private static databaseURL : typeof mongoose | pg.Pool | undefined;
@@ -708,39 +713,46 @@ class strawberryCore{
     
     }
 
-    static async updateRecord(schemaName : string, filterMethod : Record<string, any>, updateProps : Record<string, any>, updateSingle : boolean = false){
+    static async updateRecord(schemaName : string, conditionString : string, updateProps : Record<string, any>, updateSingle : boolean = false){
         if(this.isConnected === true && strawberryCore.databaseType === "mongodb"){
-            const model = mongoose.models[schemaName];
-            // check if the model exist or not 
-            if(!model){
-                throw new Error(`StrawberryDB : Schema '${schemaName} does not exists.`);
+            try {
+                // Validate condition - check weather the string is not empty
+                if (!conditionString || !conditionString.trim()){
+                    throw new Error("StrawberryDB: Condition cannot be empty.");
+                }
+
+                // Validate update properties - check is it empty or not
+                if (!updateProps || typeof updateProps !== "object" || Object.keys(updateProps).length === 0){
+                    throw new Error("StrawberryDB: Update properties cannot be empty.");
+                }
+
+                // Convert condition string into tokens
+                const tokens = this.tokenizeCondition(conditionString);
+
+                // Convert tokens into MongoDB filter
+                const filter = this.parseWhere(tokens);
+
+                // Get MongoDB model
+                const model = mongoose.model(schemaName);
+
+                // Prepare update query
+                const updateQuery = {
+                    $set: updateProps
+                };
+
+                // Execute update
+                const result = updateSingle
+                    ? await model.updateOne(filter, updateQuery)
+                    : await model.updateMany(filter, updateQuery);
+
+                return result;
+
+            }catch(error : any){
+                throw new Error(`StrawberryDB updateRecord(): ${error.message}`);
             }
-
-            // update the first matching document
-            const result = updateSingle
-            ? await model.updateOne(
-                filterMethod,     
-                { $set: updateProps },
-                { runValidators : true }
-            )
-            : await model.updateMany(
-                filterMethod,     
-                { $set: updateProps },
-                { runValidators : true }
-            );
-
-            queryTracker.trackQuery(
-                `db.${schemaName}.${updateSingle ? "updateOne" : "updateMany"}(
-                    ${JSON.stringify(filterMethod)},
-                    {$set : ${JSON.stringify(updateProps)} }
-                )`,
-                "update",
-                strawberryCore.databaseType
-            );
-            return result;
         }
         if(this.isConnected === true && strawberryCore.databaseType === "postgresql"){
-            console.log("update record of postgresql");
+            console.log("postgres is not implemented yet")
         }
         
     }

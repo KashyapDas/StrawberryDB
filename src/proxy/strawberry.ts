@@ -17,8 +17,8 @@ const strawberry = new Proxy(strawberryCore, {
             insertRecord : (schemaProperty : Record<string, any>)=>{
                 return target.insertRecord(prop, schemaProperty);
             },
-            updateRecord : (filterMehod : Record<string,any>, updateProps : Record<string, any>, updateSingle : boolean)=>{
-                return target.updateRecord(prop, filterMehod, updateProps, updateSingle);
+            updateRecord : (conditionString : string, updateProps : Record<string, any>, updateSingle : boolean)=>{
+                return target.updateRecord(prop, conditionString, updateProps, updateSingle);
             }
         }
     }
