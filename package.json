@@ -1,16 +1,27 @@
 {
   "name": "strawberrydb",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "A unified database abstraction for MongoDB and PostgreSQL.",
+  "main": "./dist/proxy/strawberry.js",
+  "types": "./dist/proxy/strawberry.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -b",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [],
+  "keywords": [
+    "strawberrydb",
+    "mongodb",
+    "postgresql",
+    "orm",
+    "odm",
+    "typescript"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "express": "^5.3.0",
     "mongoose": "^9.10.1",
     "pg": "^8.23.1"
   },

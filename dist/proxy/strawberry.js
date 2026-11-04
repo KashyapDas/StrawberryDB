@@ -1,31 +1,21 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 const { strawberryCore } = require("../core/strawberryCore");
 const strawberry = new Proxy(strawberryCore, {
     get(target, prop) {
-        // If the property exists statically on the class, return it
         if (prop in target) {
             return target[prop];
         }
-        // If not exists then, convert the user syntax to the core syntax
         return {
-            createSchema: (schemaDefination, returnValue) => {
-                return target.createSchema(prop, schemaDefination, returnValue);
-            },
-            createRelation: (table2, addedProperties, returnValue) => {
-                return target.createRelation(prop, table2, addedProperties, returnValue);
-            },
-            insertRecord: (schemaProperty) => {
-                return target.insertRecord(prop, schemaProperty);
-            },
-            updateRecord: (conditionString, updateProps, updateSingle) => {
-                return target.updateRecord(prop, conditionString, updateProps, updateSingle);
-            }
+            createSchema: (schemaDefination, returnValue) => target.createSchema(prop, schemaDefination, returnValue),
+            createRelation: (table2, addedProperties, returnValue) => target.createRelation(prop, table2, addedProperties, returnValue),
+            insertRecord: (schemaProperty) => target.insertRecord(prop, schemaProperty),
+            updateRecord: (conditionString, updateProps) => target.updateRecord(prop, conditionString, updateProps)
         };
     }
 });
+const connectSandBox = strawberryCore.connectSandBox;
 module.exports = {
     strawberry,
-    connectSandBox: strawberryCore.connectSandBox
+    connectSandBox
 };
 //# sourceMappingURL=strawberry.js.map
