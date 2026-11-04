@@ -224,9 +224,11 @@ class strawberryCore extends strawberryReusable {
             }
             // console.log(mongooseSchemaDefinition);
             // create real mongoose schema
+            // Create real Mongoose schema
             const newSchema = new mongoose.Schema(mongooseSchemaDefinition);
-            // create mongoose model dynamically
-            const newModel = mongoose.model(schemaName, newSchema);
+            // Register model
+            const newModel = mongoose.models[schemaName] ||
+                mongoose.model(schemaName, newSchema);
             const query = `
                 mongoose.Schema(${JSON.stringify(mongooseSchemaDefinition, null, 2)})
 
@@ -508,6 +510,7 @@ class strawberryCore extends strawberryReusable {
     static async insertRecord(schemaName, schemaProperty) {
         if (strawberryCore.isConnected === true && strawberryCore.databaseType === "mongodb") {
             const model = mongoose.models[schemaName];
+            // check if the table exist or not
             if (!model) {
                 throw new Error(`StrawberryDB: Schema '${schemaName}' does not exist.`);
             }
@@ -565,6 +568,9 @@ class strawberryCore extends strawberryReusable {
             }
             catch (error) {
                 // PostgreSQL error normalization
+                if (error.code === "42P01") {
+                    throw new Error(`StrawberryDB: Schema '${schemaName}' does not exist.`);
+                }
                 if (error.code === "23505") {
                     throw new Error("A record with this unique value already exists.");
                 }
