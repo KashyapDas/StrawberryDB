@@ -130,8 +130,7 @@ class strawberryReusable {
     // parserValue() => convert token value into javascript value
     static parseValue(token) {
         // Handle quoted strings
-        if ((token.startsWith("'") && token.endsWith("'")) ||
-            (token.startsWith('"') && token.endsWith('"'))) {
+        if ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('"') && token.endsWith('"'))) {
             const quote = token[0];
             let value = "";
             for (let i = 1; i < token.length - 1; i++) {
@@ -323,6 +322,174 @@ class strawberryReusable {
             throw new Error(`StrawberryDB: Unexpected token '${peek()}'.`);
         }
         return result;
+    }
+    // parser to handle sql injection in postgresql
+    static convertPostgresWhere(condition, updateLength) {
+        const values = [];
+        let parameterIndex = updateLength + 1;
+        let tokenIndex = 0;
+        if (!condition || !condition.trim()) {
+            throw new Error("StrawberryDB: Condition cannot be empty.");
+        }
+        if (!Number.isInteger(updateLength) || updateLength < 0) {
+            throw new Error("StrawberryDB: Invalid update parameter length.");
+        }
+        const tokens = this.tokenizeCondition(condition);
+        if (!tokens[0] || tokens[0].toUpperCase() !== "WHERE") {
+            throw new Error("StrawberryDB: Condition must start with WHERE.");
+        }
+        // Remove WHERE from the token list.
+        tokenIndex = 1;
+        const currentToken = () => tokens[tokenIndex];
+        const match = (token) => {
+            const value = currentToken();
+            if (value !== undefined && value.toUpperCase() === token) {
+                tokenIndex++;
+                return true;
+            }
+            return false;
+        };
+        const quoteIdentifier = (column) => {
+            return column
+                .split(".")
+                .map(part => {
+                const identifier = part.replace(/^"|"$/g, "");
+                return `"${identifier.split('"').join('""')}"`;
+            })
+                .join(".");
+        };
+        const getValue = () => {
+            const token = currentToken();
+            if (token === undefined) {
+                throw new Error("StrawberryDB: Expected a value.");
+            }
+            tokenIndex++;
+            return this.parseValue(token);
+        };
+        const createPlaceholder = (value) => {
+            values.push(value);
+            return `$${parameterIndex++}`;
+        };
+        // Comparison: column operator value
+        const parseComparison = () => {
+            const column = currentToken();
+            if (!column || column === "(" || column === ")" || column === ",") {
+                throw new Error("StrawberryDB: Invalid column name.");
+            }
+            tokenIndex++;
+            const safeColumn = quoteIdentifier(column);
+            // NOT IN
+            if (currentToken()?.toUpperCase() === "NOT" &&
+                tokens[tokenIndex + 1]?.toUpperCase() === "IN") {
+                tokenIndex += 2;
+                if (!match("(")) {
+                    throw new Error("StrawberryDB: Expected '(' after NOT IN.");
+                }
+                const placeholders = [];
+                while (currentToken() !== ")") {
+                    if (currentToken() === undefined) {
+                        throw new Error("StrawberryDB: Invalid NOT IN expression.");
+                    }
+                    placeholders.push(createPlaceholder(getValue()));
+                    if (!match(","))
+                        break;
+                }
+                if (!match(")") || placeholders.length === 0) {
+                    throw new Error("StrawberryDB: Invalid NOT IN expression.");
+                }
+                return `${safeColumn} NOT IN (${placeholders.join(", ")})`;
+            }
+            // IN
+            if (match("IN")) {
+                if (!match("(")) {
+                    throw new Error("StrawberryDB: Expected '(' after IN.");
+                }
+                const placeholders = [];
+                while (currentToken() !== ")") {
+                    if (currentToken() === undefined) {
+                        throw new Error("StrawberryDB: Invalid IN expression.");
+                    }
+                    placeholders.push(createPlaceholder(getValue()));
+                    if (!match(","))
+                        break;
+                }
+                if (!match(")") || placeholders.length === 0) {
+                    throw new Error("StrawberryDB: Invalid IN expression.");
+                }
+                return `${safeColumn} IN (${placeholders.join(", ")})`;
+            }
+            // BETWEEN
+            if (match("BETWEEN")) {
+                const firstValue = getValue();
+                if (!match("AND")) {
+                    throw new Error("StrawberryDB: BETWEEN requires AND.");
+                }
+                const secondValue = getValue();
+                const firstPlaceholder = createPlaceholder(firstValue);
+                const secondPlaceholder = createPlaceholder(secondValue);
+                return `${safeColumn} BETWEEN ${firstPlaceholder} AND ${secondPlaceholder}`;
+            }
+            // Normal comparison operators
+            const operator = currentToken();
+            const operatorMap = {
+                "=": "=",
+                "!=": "<>",
+                "<>": "<>",
+                ">": ">",
+                ">=": ">=",
+                "<": "<",
+                "<=": "<="
+            };
+            if (!operator || !operatorMap[operator]) {
+                throw new Error("StrawberryDB: Unsupported comparison operator.");
+            }
+            tokenIndex++;
+            const value = getValue();
+            const placeholder = createPlaceholder(value);
+            return `${safeColumn} ${operatorMap[operator]} ${placeholder}`;
+        };
+        // Primary: comparison or parenthesized expression
+        const parsePrimary = () => {
+            if (match("(")) {
+                const expression = parseOr();
+                if (!match(")")) {
+                    throw new Error("StrawberryDB: Missing closing parenthesis.");
+                }
+                return `(${expression})`;
+            }
+            return parseComparison();
+        };
+        // NOT
+        const parseNot = () => {
+            if (match("NOT")) {
+                return `NOT ${parseNot()}`;
+            }
+            return parsePrimary();
+        };
+        // AND
+        const parseAnd = () => {
+            let expression = parseNot();
+            while (match("AND")) {
+                expression += ` AND ${parseNot()}`;
+            }
+            return expression;
+        };
+        // OR
+        const parseOr = () => {
+            let expression = parseAnd();
+            while (match("OR")) {
+                expression += ` OR ${parseAnd()}`;
+            }
+            return expression;
+        };
+        const convertedCondition = parseOr();
+        if (tokenIndex !== tokens.length) {
+            throw new Error(`StrawberryDB: Unexpected token '${currentToken()}'.`);
+        }
+        return {
+            query: `WHERE ${convertedCondition}`,
+            values
+        };
     }
 }
 // ecport happen here

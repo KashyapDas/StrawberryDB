@@ -44,7 +44,6 @@ class strawberryCore extends strawberryReusable {
                 await strawberryCore.databaseURL.query("SELECT 1");
                 strawberryCore.databaseType = "postgresql";
                 strawberryCore.isConnected = true;
-                console.log("postgresql database connected..");
             }
             catch (error) {
                 console.log('Connection failed');
@@ -582,14 +581,14 @@ class strawberryCore extends strawberryReusable {
             }
         }
     }
-    static async updateRecord(schemaName, conditionString, updateProps, updateSingle = false) {
+    static async updateRecord(schemaName, conditionString, updateProps) {
         if (this.isConnected === true && strawberryCore.databaseType === "mongodb") {
             try {
                 // Validate condition - check weather the string is not empty
                 if (!conditionString || !conditionString.trim()) {
                     throw new Error("StrawberryDB: Condition cannot be empty.");
                 }
-                // Validate update properties
+                // Validate update properties - check is it empty or not
                 if (!updateProps || typeof updateProps !== "object" || Object.keys(updateProps).length === 0) {
                     throw new Error("StrawberryDB: Update properties cannot be empty.");
                 }
@@ -603,10 +602,8 @@ class strawberryCore extends strawberryReusable {
                 const updateQuery = {
                     $set: updateProps
                 };
-                // Execute update
-                const result = updateSingle
-                    ? await model.updateOne(filter, updateQuery)
-                    : await model.updateMany(filter, updateQuery);
+                // Execute the query
+                const result = await model.updateMany(filter, updateQuery);
                 return result;
             }
             catch (error) {
@@ -614,7 +611,49 @@ class strawberryCore extends strawberryReusable {
             }
         }
         if (this.isConnected === true && strawberryCore.databaseType === "postgresql") {
-            console.log("postgres is not implemented yet");
+            try {
+                // filter condition can't be empty
+                if (!conditionString || !conditionString.trim()) {
+                    throw new Error("StrawberryDB: Condition cannot be empty.");
+                }
+                // update props can't be empty
+                if (!updateProps || typeof updateProps !== "object" || Object.keys(updateProps).length === 0) {
+                    throw new Error("StrawberryDB: Update properties cannot be empty.");
+                }
+                const pool = strawberryCore.databaseURL;
+                // Get update properties.
+                const updateEntries = Object.entries(updateProps);
+                const updateValues = [];
+                const setExpressions = [];
+                let parameterIndex = 1;
+                // Generate SET expressions.
+                for (const [key, value] of updateEntries) {
+                    const safeColumn = `"${key.split('"').join('""')}"`;
+                    setExpressions.push(`${safeColumn} = $${parameterIndex++}`);
+                    updateValues.push(value);
+                }
+                // Convert WHERE condition.
+                const convertedWhere = this.convertPostgresWhere(conditionString, updateEntries.length);
+                // Generate table identifier.
+                const safeTable = `"${schemaName.split('"').join('""')}"`;
+                // Generate final UPDATE query.
+                let query = `
+                    UPDATE ${safeTable}
+                    SET ${setExpressions.join(", ")}
+                    ${convertedWhere.query}
+                `;
+                // Combine SET values and WHERE values.
+                const values = [
+                    ...updateValues,
+                    ...convertedWhere.values
+                ];
+                // excuted the query
+                const result = await pool.query(query, values);
+                return result;
+            }
+            catch (error) {
+                throw new Error(`StrawberryDB updateRecord(): ${error.message}`);
+            }
         }
     }
 }

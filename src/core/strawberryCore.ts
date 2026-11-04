@@ -62,7 +62,6 @@ class strawberryCore extends strawberryReusable{
                 await strawberryCore.databaseURL.query("SELECT 1");
                 strawberryCore.databaseType = "postgresql";
                 strawberryCore.isConnected = true;
-                console.log("postgresql database connected..");
             }catch(error){
                 console.log('Connection failed');
             }
@@ -713,7 +712,7 @@ class strawberryCore extends strawberryReusable{
     
     }
 
-    static async updateRecord(schemaName : string, conditionString : string, updateProps : Record<string, any>, updateSingle : boolean = false){
+    static async updateRecord(schemaName : string, conditionString : string, updateProps : Record<string, any>){
         if(this.isConnected === true && strawberryCore.databaseType === "mongodb"){
             try {
                 // Validate condition - check weather the string is not empty
@@ -740,10 +739,8 @@ class strawberryCore extends strawberryReusable{
                     $set: updateProps
                 };
 
-                // Execute update
-                const result = updateSingle
-                    ? await model.updateOne(filter, updateQuery)
-                    : await model.updateMany(filter, updateQuery);
+                // Execute the query
+                const result = await model.updateMany(filter, updateQuery);
 
                 return result;
 
@@ -751,9 +748,71 @@ class strawberryCore extends strawberryReusable{
                 throw new Error(`StrawberryDB updateRecord(): ${error.message}`);
             }
         }
-        if(this.isConnected === true && strawberryCore.databaseType === "postgresql"){
-            console.log("postgres is not implemented yet")
-        }
+        if (this.isConnected === true && strawberryCore.databaseType === "postgresql") 
+        {
+            try {
+                // filter condition can't be empty
+                if (!conditionString || !conditionString.trim()) {
+                    throw new Error("StrawberryDB: Condition cannot be empty.");
+                }
+                // update props can't be empty
+                if (!updateProps || typeof updateProps !== "object" || Object.keys(updateProps).length === 0){
+                    throw new Error("StrawberryDB: Update properties cannot be empty.");
+                }
+
+                const pool: pg.Pool = strawberryCore.databaseURL as pg.Pool;
+
+                // Get update properties.
+                const updateEntries = Object.entries(updateProps);
+
+                const updateValues: any[] = [];
+                const setExpressions: string[] = [];
+
+                let parameterIndex = 1;
+
+                // Generate SET expressions.
+                for (const [key, value] of updateEntries) {
+
+                    const safeColumn = `"${key.split('"').join('""')}"`;
+
+                    setExpressions.push(
+                        `${safeColumn} = $${parameterIndex++}`
+                    );
+
+                    updateValues.push(value);
+                }
+
+                // Convert WHERE condition.
+                const convertedWhere = this.convertPostgresWhere(
+                    conditionString,
+                    updateEntries.length
+                );
+
+                // Generate table identifier.
+                const safeTable = `"${schemaName.split('"').join('""')}"`;
+
+                // Generate final UPDATE query.
+                let query = `
+                    UPDATE ${safeTable}
+                    SET ${setExpressions.join(", ")}
+                    ${convertedWhere.query}
+                `;
+
+                // Combine SET values and WHERE values.
+                const values = [
+                    ...updateValues,
+                    ...convertedWhere.values
+                ];               
+                // excuted the query
+                const result = await pool.query(query, values);
+                return result;
+
+            } catch (error: any) {
+                throw new Error(
+                    `StrawberryDB updateRecord(): ${error.message}`
+                );
+            }
+        }   
         
     }
 }

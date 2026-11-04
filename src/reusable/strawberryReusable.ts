@@ -69,7 +69,7 @@ const strawberryLogicalOperators: StrawberryLogicalOperators[] = [
 // class that hold the reusable method inside it for further use
 class strawberryReusable {
     // tokenizeCondition() => convert the condition string into token
-    static tokenizeCondition(condition: string): StrawberryToken[]
+    protected static tokenizeCondition(condition: string): StrawberryToken[]
     {
 
         const tokens: StrawberryToken[] = [];
@@ -225,13 +225,9 @@ class strawberryReusable {
     }
 
     // parserValue() => convert token value into javascript value
-    static parseValue(token: StrawberryToken): any {
-
+    protected static parseValue(token: StrawberryToken): any {
         // Handle quoted strings
-        if (
-            (token.startsWith("'") && token.endsWith("'")) ||
-            (token.startsWith('"') && token.endsWith('"'))
-        ) {
+        if ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('"') && token.endsWith('"'))){
 
             const quote = token[0];
 
@@ -280,7 +276,7 @@ class strawberryReusable {
     }
 
     // parseWhere() => Convert the token into Mongodb compatible filter
-    static parseWhere(tokens: StrawberryToken[]): Record<string, any> {
+    protected static parseWhere(tokens: StrawberryToken[]): Record<string, any> {
 
         let position = 0;
 
@@ -542,6 +538,241 @@ class strawberryReusable {
 
         return result;
     }
+
+    // parser to handle sql injection in postgresql
+    
+    
+    protected static convertPostgresWhere(condition: string,updateLength: number){
+        const values: any[] = [];
+        let parameterIndex = updateLength + 1;
+        let tokenIndex = 0;
+
+        if (!condition || !condition.trim()) {
+            throw new Error("StrawberryDB: Condition cannot be empty.");
+        }
+
+        if (!Number.isInteger(updateLength) || updateLength < 0) {
+            throw new Error("StrawberryDB: Invalid update parameter length.");
+        }
+
+        const tokens = this.tokenizeCondition(condition);
+
+        if (!tokens[0] || tokens[0].toUpperCase() !== "WHERE") {
+            throw new Error("StrawberryDB: Condition must start with WHERE.");
+        }
+
+        // Remove WHERE from the token list.
+        tokenIndex = 1;
+
+        const currentToken = () => tokens[tokenIndex];
+
+        const match = (token: string) => {
+            const value = currentToken();
+
+            if (value !== undefined && value.toUpperCase() === token) {
+                tokenIndex++;
+                return true;
+            }
+
+            return false;
+        };
+
+        const quoteIdentifier = (column: string) => {
+            return column
+                .split(".")
+                .map(part => {
+                    const identifier = part.replace(/^"|"$/g, "");
+                    return `"${identifier.split('"').join('""')}"`;
+                })
+                .join(".");
+        };
+
+        const getValue = () => {
+            const token = currentToken();
+
+            if (token === undefined) {
+                throw new Error("StrawberryDB: Expected a value.");
+            }
+
+            tokenIndex++;
+
+            return this.parseValue(token);
+        };
+
+        const createPlaceholder = (value: any) => {
+            values.push(value);
+            return `$${parameterIndex++}`;
+        };
+
+        // Comparison: column operator value
+        const parseComparison = (): string => {
+            const column = currentToken();
+
+            if (!column || column === "(" || column === ")" || column === ",") {
+                throw new Error("StrawberryDB: Invalid column name.");
+            }
+
+            tokenIndex++;
+
+            const safeColumn = quoteIdentifier(column);
+
+            // NOT IN
+            if (
+                currentToken()?.toUpperCase() === "NOT" &&
+                tokens[tokenIndex + 1]?.toUpperCase() === "IN"
+            ) {
+                tokenIndex += 2;
+
+                if (!match("(")) {
+                    throw new Error("StrawberryDB: Expected '(' after NOT IN.");
+                }
+
+                const placeholders: string[] = [];
+
+                while (currentToken() !== ")") {
+                    if (currentToken() === undefined) {
+                        throw new Error("StrawberryDB: Invalid NOT IN expression.");
+                    }
+
+                    placeholders.push(createPlaceholder(getValue()));
+
+                    if (!match(",")) break;
+                }
+
+                if (!match(")") || placeholders.length === 0) {
+                    throw new Error("StrawberryDB: Invalid NOT IN expression.");
+                }
+
+                return `${safeColumn} NOT IN (${placeholders.join(", ")})`;
+            }
+
+            // IN
+            if (match("IN")) {
+                if (!match("(")) {
+                    throw new Error("StrawberryDB: Expected '(' after IN.");
+                }
+
+                const placeholders: string[] = [];
+
+                while (currentToken() !== ")") {
+                    if (currentToken() === undefined) {
+                        throw new Error("StrawberryDB: Invalid IN expression.");
+                    }
+
+                    placeholders.push(createPlaceholder(getValue()));
+
+                    if (!match(",")) break;
+                }
+
+                if (!match(")") || placeholders.length === 0) {
+                    throw new Error("StrawberryDB: Invalid IN expression.");
+                }
+
+                return `${safeColumn} IN (${placeholders.join(", ")})`;
+            }
+
+            // BETWEEN
+            if (match("BETWEEN")) {
+                const firstValue = getValue();
+
+                if (!match("AND")) {
+                    throw new Error("StrawberryDB: BETWEEN requires AND.");
+                }
+
+                const secondValue = getValue();
+
+                const firstPlaceholder = createPlaceholder(firstValue);
+                const secondPlaceholder = createPlaceholder(secondValue);
+
+                return `${safeColumn} BETWEEN ${firstPlaceholder} AND ${secondPlaceholder}`;
+            }
+
+            // Normal comparison operators
+            const operator = currentToken();
+
+            const operatorMap: Record<string, string> = {
+                "=": "=",
+                "!=": "<>",
+                "<>": "<>",
+                ">": ">",
+                ">=": ">=",
+                "<": "<",
+                "<=": "<="
+            };
+
+            if (!operator || !operatorMap[operator]) {
+                throw new Error("StrawberryDB: Unsupported comparison operator.");
+            }
+
+            tokenIndex++;
+
+            const value = getValue();
+            const placeholder = createPlaceholder(value);
+
+            return `${safeColumn} ${operatorMap[operator]} ${placeholder}`;
+        };
+
+        // Primary: comparison or parenthesized expression
+        const parsePrimary = (): string => {
+            if (match("(")) {
+                const expression = parseOr();
+
+                if (!match(")")) {
+                    throw new Error("StrawberryDB: Missing closing parenthesis.");
+                }
+
+                return `(${expression})`;
+            }
+
+            return parseComparison();
+        };
+
+        // NOT
+        const parseNot = (): string => {
+            if (match("NOT")) {
+                return `NOT ${parseNot()}`;
+            }
+
+            return parsePrimary();
+        };
+
+        // AND
+        const parseAnd = (): string => {
+            let expression = parseNot();
+
+            while (match("AND")) {
+                expression += ` AND ${parseNot()}`;
+            }
+
+            return expression;
+        };
+
+        // OR
+        const parseOr = (): string => {
+            let expression = parseAnd();
+
+            while (match("OR")) {
+                expression += ` OR ${parseAnd()}`;
+            }
+
+            return expression;
+        };
+
+        const convertedCondition = parseOr();
+
+        if (tokenIndex !== tokens.length) {
+            throw new Error(
+                `StrawberryDB: Unexpected token '${currentToken()}'.`
+            );
+        }
+
+        return {
+            query: `WHERE ${convertedCondition}`,
+            values
+        };
+    }
+
+
 
 }
 
