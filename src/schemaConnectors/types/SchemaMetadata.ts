@@ -1,136 +1,52 @@
 
-/**
- * Represents metadata extracted from a database.
- * This metadata is shared by SQL and Mongoose schema generators.
- */
+export type PostgresDataType =
+  | "VARCHAR"
+  | "TEXT"
+  | "INTEGER"
+  | "SMALLINT"
+  | "BIGINT"
+  | "DOUBLE PRECISION"
+  | "NUMERIC"
+  | "BOOLEAN"
+  | "DATE"
+  | "TIMESTAMP"
+  | "JSON"
+  | "JSONB"
+  | "UUID"
+  | "ARRAY"
+  | "UNKNOWN";
 
-// Supported PostgreSQL column types
-export type PostgreSQLDataType =
-    | "smallint"
-    | "integer"
-    | "bigint"
-    | "numeric"
-    | "real"
-    | "double precision"
-    | "boolean"
-    | "character"
-    | "character varying"
-    | "text"
-    | "uuid"
-    | "date"
-    | "time"
-    | "time with time zone"
-    | "time without time zone"
-    | "timestamp"
-    | "timestamp with time zone"
-    | "timestamp without time zone"
-    | "json"
-    | "jsonb"
-    | "bytea"
-    | "array"
-    | "enum"
-    | "user-defined"
-    | "other";
-
-// Column metadata
 export interface ColumnMetadata {
-    columnName: string;
+  name: string;
+  dataType: PostgresDataType;
 
-    // Original PostgreSQL datatype
-    dataType: PostgreSQLDataType;
-    udtName: string;
+  nullable: boolean;
+  defaultValue: string | null;
 
-    // Type properties
-    maxLength?: number;
-    precision?: number;
-    scale?: number;
-    arrayDimensions?: number;
+  maxLength: number | null;
+  precision: number | null;
+  scale: number | null;
 
-    // Constraints and defaults
-    isNullable: boolean;
-    defaultExpression?: string;
-
-    // Identity / generated columns
-    isIdentity: boolean;
-    identityGeneration?: "ALWAYS" | "BY DEFAULT";
-
-    isGenerated: boolean;
-    generatedExpression?: string;
-
-    // Enum information
-    enumValues?: string[];
+  isPrimaryKey: boolean;
+  isUnique: boolean;
 }
 
-// Primary key metadata
-export interface PrimaryKeyMetadata {
-    constraintName: string;
-    columns: string[];
-}
-
-// Foreign key metadata
 export interface ForeignKeyMetadata {
-    constraintName: string;
-
-    columns: string[];
-
-    referencedSchema: string;
-    referencedTable: string;
-    referencedColumns: string[];
-
-    onUpdate: string;
-    onDelete: string;
-
-    isDeferrable: boolean;
-    initiallyDeferred: boolean;
+  columnName: string;
+  referencedTable: string;
+  referencedColumn: string;
 }
 
-// Unique constraint metadata
-export interface UniqueConstraintMetadata {
-    constraintName: string;
-    columns: string[];
-}
-
-// Check constraint metadata
-export interface CheckConstraintMetadata {
-    constraintName: string;
-    expression: string;
-}
-
-// Index metadata
-export interface IndexMetadata {
-    indexName: string;
-    columns: string[];
-    isUnique: boolean;
-    method: string;
-    definition?: string;
-}
-
-// All table constraints
-export interface TableConstraints {
-    primaryKey?: PrimaryKeyMetadata;
-
-    foreignKeys: ForeignKeyMetadata[];
-
-    uniqueConstraints: UniqueConstraintMetadata[];
-
-    checkConstraints: CheckConstraintMetadata[];
-}
-
-// Complete table metadata
 export interface TableMetadata {
-    schemaName: string;
-    tableName: string;
+  tableName: string;
 
-    columns: ColumnMetadata[];
+  columns: ColumnMetadata[];
 
-    constraints: TableConstraints;
+  primaryKeys: string[];
 
-    indexes: IndexMetadata[];
+  foreignKeys: ForeignKeyMetadata[];
 }
 
-// Complete database metadata
 export interface DatabaseMetadata {
-    databaseType: "postgresql";
-
-    tables: TableMetadata[];
+  tables: TableMetadata[];
 }
