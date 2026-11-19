@@ -1,4 +1,10 @@
+
 const { strawberryCore } = require("../core/strawberryCore");
+
+const {
+    postgresToMongoose,
+    mongoToPostgres
+} = require("../schemaConnectors");
 
 type SchemaAPI = {
     createSchema: (
@@ -62,5 +68,7 @@ const connectSandBox: (url: string) => Promise<void> =
 
 export = {
     strawberry,
-    connectSandBox
+    connectSandBox,
+    postgresToMongoose,
+    mongoToPostgres
 };
