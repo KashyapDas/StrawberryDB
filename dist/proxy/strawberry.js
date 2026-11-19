@@ -1,5 +1,6 @@
 "use strict";
 const { strawberryCore } = require("../core/strawberryCore");
+const { postgresToMongoose, mongoToPostgres } = require("../schemaConnectors/connectors");
 const strawberry = new Proxy(strawberryCore, {
     get(target, prop) {
         if (prop in target) {
@@ -16,6 +17,8 @@ const strawberry = new Proxy(strawberryCore, {
 const connectSandBox = strawberryCore.connectSandBox;
 module.exports = {
     strawberry,
-    connectSandBox
+    connectSandBox,
+    postgresToMongoose,
+    mongoToPostgres
 };
 //# sourceMappingURL=strawberry.js.map

@@ -4,7 +4,7 @@ const { strawberryCore } = require("../core/strawberryCore");
 const {
     postgresToMongoose,
     mongoToPostgres
-} = require("../schemaConnectors");
+} = require("../schemaConnectors/connectors");
 
 type SchemaAPI = {
     createSchema: (

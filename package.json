@@ -1,6 +1,6 @@
 {
   "name": "strawberrydb",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A unified database abstraction for MongoDB and PostgreSQL.",
   "main": "./dist/proxy/strawberry.js",
   "types": "./dist/proxy/strawberry.d.ts",

@@ -12,6 +12,8 @@ type StrawberryAPI = {
 declare const _default: {
     strawberry: StrawberryAPI;
     connectSandBox: (url: string) => Promise<void>;
+    postgresToMongoose: any;
+    mongoToPostgres: any;
 };
 export = _default;
 //# sourceMappingURL=strawberry.d.ts.map
